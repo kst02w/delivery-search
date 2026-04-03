@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivery Search 詳細設計書</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;color:#1a1a1a;background:#f5f5f5;line-height:1.7}
+a{color:#185FA5;text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ナビ */
+nav{position:fixed;top:0;left:0;width:220px;height:100vh;background:#1a1a1a;color:#fff;overflow-y:auto;padding:20px 0;z-index:100}
+nav h2{font-size:12px;color:#888;padding:0 16px 8px;letter-spacing:1px;text-transform:uppercase}
+nav ul{list-style:none}
+nav ul li a{display:block;padding:6px 16px;font-size:13px;color:#ccc;border-left:3px solid transparent}
+nav ul li a:hover,nav ul li a.active{color:#fff;border-left-color:#378ADD;background:rgba(255,255,255,0.05);text-decoration:none}
+nav ul li.section{margin-top:16px}
+
+/* メイン */
+main{margin-left:220px;padding:40px 48px;max-width:960px}
+h1{font-size:26px;font-weight:500;margin-bottom:6px}
+.meta{font-size:12px;color:#888;margin-bottom:40px}
+h2{font-size:20px;font-weight:500;margin:48px 0 16px;padding-bottom:8px;border-bottom:2px solid #e0e0e0}
+h3{font-size:16px;font-weight:500;margin:28px 0 10px;color:#185FA5}
+h4{font-size:14px;font-weight:500;margin:20px 0 8px;color:#444}
+p{margin-bottom:12px;color:#333}
+
+/* テーブル */
+table{width:100%;border-collapse:collapse;margin:12px 0 20px;font-size:13px}
+th{background:#1a1a1a;color:#fff;padding:8px 12px;text-align:left;font-weight:500;font-size:12px}
+td{padding:8px 12px;border-bottom:1px solid #eee;vertical-align:top}
+tr:nth-child(even) td{background:#fafafa}
+td code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:12px;font-family:monospace}
+
+/* コードブロック */
+pre{background:#1e1e2e;color:#cdd6f4;padding:16px;border-radius:8px;overflow-x:auto;margin:12px 0 20px;font-size:12px;line-height:1.6}
+code.inline{background:#f0f0f0;padding:2px 6px;border-radius:3px;font-size:12px;font-family:'SF Mono',monospace;color:#c7254e}
+
+/* バッジ */
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500;margin-left:6px}
+.badge-blue{background:#E6F1FB;color:#0C447C}
+.badge-green{background:#EAF3DE;color:#27500A}
+.badge-amber{background:#FAEEDA;color:#633806}
+.badge-gray{background:#F1EFE8;color:#444441}
+
+/* カード */
+.card{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:20px;margin:12px 0}
+.card h4{margin-top:0}
+
+/* フロー */
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0;padding:14px;background:#f8f8f8;border-radius:8px;font-size:13px}
+.flow-step{background:#1a1a1a;color:#fff;padding:4px 12px;border-radius:4px;white-space:nowrap}
+.flow-arrow{color:#aaa;font-size:16px}
+.flow-step.blue{background:#185FA5}
+.flow-step.green{background:#3B6D11}
+.flow-step.amber{background:#854F0B}
+
+/* 注意 */
+.note{background:#FFF8E1;border-left:4px solid #EF9F27;padding:10px 14px;border-radius:0 6px 6px 0;margin:12px 0;font-size:13px}
+.warn{background:#FEF2F2;border-left:4px solid #E24B4A;padding:10px 14px;border-radius:0 6px 6px 0;margin:12px 0;font-size:13px}
+
+/* セクション区切り */
+.divider{height:1px;background:#e0e0e0;margin:40px 0}
+</style>
+</head>
+<body>
+
+<nav>
+  <h2>目次</h2>
+  <ul>
+    <li><a href="#overview">1. 概要</a></li>
+    <li class="section"><a href="#files">2. ファイル構成</a></li>
+    <li><a href="#config">3. 設定値一覧</a></li>
+    <li class="section"><a href="#modules">4. モジュール構成</a></li>
+    <li><a href="#ui">　UI層</a></li>
+    <li><a href="#fetch">　データ取得層</a></li>
+    <li><a href="#process">　処理層</a></li>
+    <li><a href="#render">　表示層</a></li>
+    <li class="section"><a href="#functions">5. 関数仕様</a></li>
+    <li><a href="#fn-initWeekList">　initWeekList</a></li>
+    <li><a href="#fn-loadWeekFile">　loadWeekFile</a></li>
+    <li><a href="#fn-parseXlsx">　parseXlsx</a></li>
+    <li><a href="#fn-parseTSV">　parseTSV</a></li>
+    <li><a href="#fn-initControls">　initControls</a></li>
+    <li><a href="#fn-render">　render</a></li>
+    <li><a href="#fn-getImageUrl">　getImageUrl</a></li>
+    <li><a href="#fn-switchTab">　switchTab</a></li>
+    <li><a href="#fn-lightbox">　lightbox</a></li>
+    <li class="section"><a href="#dataflow">6. データフロー</a></li>
+    <li><a href="#df-auto">　自動読み込み</a></li>
+    <li><a href="#df-upload">　Excelアップロード</a></li>
+    <li><a href="#df-paste">　コピペ入力</a></li>
+    <li class="section"><a href="#data">7. データ仕様</a></li>
+    <li><a href="#index-json">　index.json</a></li>
+    <li><a href="#excel-format">　Excelフォーマット</a></li>
+    <li><a href="#allrows">　allRows 構造</a></li>
+    <li class="section"><a href="#constraints">8. 制約・注意事項</a></li>
+    <li><a href="#env">9. 動作環境</a></li>
+  </ul>
+</nav>
+
+<main>
+  <h1>Delivery Search 詳細設計書</h1>
+  <p class="meta">対象ファイル: delivery_search_v4 (index.html) ／ 作成: ECCO Japan IT ／ バージョン: v4</p>
+
+  <!-- 1. 概要 -->
+  <h2 id="overview">1. 概要</h2>
+  <p>ECCOジャパン国内80店舗向けの出荷明細照会ツール。SAPから出力した出荷明細ExcelをGitHub Pagesにホストし、店舗スタッフがブラウザから自店舗の出荷内容（DN番号・商品・サイズ別数量）を確認できる。</p>
+
+  <table>
+    <tr><th>項目</th><th>内容</th></tr>
+    <tr><td>公開URL</td><td><code class="inline">https://kst02w.github.io/delivery-search/</code></td></tr>
+    <tr><td>ホスティング</td><td>GitHub Pages（静的サイト・無料）</td></tr>
+    <tr><td>利用者</td><td>国内約80店舗のスタッフ（閲覧のみ）</td></tr>
+    <tr><td>更新者</td><td>本部IT担当者（週1回）</td></tr>
+    <tr><td>使用ライブラリ</td><td>SheetJS (xlsx 0.18.5) — Excelパース用</td></tr>
+    <tr><td>認証</td><td>なし（URL共有によるアクセス）</td></tr>
+    <tr><td>画像サーバー</td><td>社内DNS限定 — 社外NW/VPNなしでは画像不可</td></tr>
+  </table>
+
+  <!-- 2. ファイル構成 -->
+  <h2 id="files">2. ファイル構成</h2>
+  <pre>delivery-search/                 # GitHubリポジトリルート
+├── index.html                   # ツール本体（全ロジック含む単一ファイル）
+├── index.json                   # 週リスト定義ファイル（本部が週次更新）
+├── current.xlsx                 # 今週の出荷明細（本部が毎週上書き）
+└── archive/                     # 過去週のアーカイブフォルダ
+    ├── 2026_W13.xlsx
+    ├── 2026_W12.xlsx
+    └── 2026_W11.xlsx</pre>
+
+  <div class="note">index.htmlとデータファイルは同一リポジトリルートに配置。相対パスは <code class="inline">./</code> で参照。</div>
+
+  <!-- 3. 設定値 -->
+  <h2 id="config">3. 設定値一覧</h2>
+  <table>
+    <tr><th>定数名</th><th>値</th><th>説明</th></tr>
+    <tr><td><code class="inline">DATA_BASE</code></td><td><code class="inline">'./'</code></td><td>データファイルへの相対パスプレフィックス。index.jsonとxlsxの取得に使用。</td></tr>
+    <tr><td>SheetJS CDN</td><td><code class="inline">cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js</code></td><td>Excelパース用ライブラリ。外部CDNから読み込み。</td></tr>
+    <tr><td>画像URLベース</td><td><code class="inline">http://image/product/{code}/*/thumbnail?nodefault=true</code></td><td>社内DNS限定URL。10桁の場合は先頭に0を付加。</td></tr>
+    <tr><td>線画URLベース</td><td>（未使用）</td><td>将来拡張用。VBAの linedrawing ロジックに対応。</td></tr>
+    <tr><td>サイズ判定正規表現</td><td><code class="inline">/^\d{2}$/</code></td><td>GrV列の値が2桁数字のものをサイズとして扱う。</td></tr>
+  </table>
+
+  <!-- 4. モジュール構成 -->
+  <h2 id="modules">4. モジュール構成</h2>
+  <p>index.html は単一ファイルで4層構造を持つ。</p>
+
+  <h3 id="ui">UI層（タブ・フォーム）</h3>
+  <div class="card">
+    <h4>担当要素</h4>
+    <table>
+      <tr><th>要素ID</th><th>種類</th><th>役割</th></tr>
+      <tr><td><code class="inline">tab-auto / pane-auto</code></td><td>タブ+パネル</td><td>自動読み込みタブ。週ドロップダウン・バッジを含む。</td></tr>
+      <tr><td><code class="inline">tab-paste / pane-paste</code></td><td>タブ+パネル</td><td>コピペ入力タブ。テキストエリアと読み込みボタン。</td></tr>
+      <tr><td><code class="inline">tab-file / pane-file</code></td><td>タブ+パネル</td><td>Excelアップロードタブ。ファイル選択input。</td></tr>
+      <tr><td><code class="inline">week-sel</code></td><td>select</td><td>週選択ドロップダウン。index.jsonから動的生成。</td></tr>
+      <tr><td><code class="inline">week-badge</code></td><td>span</td><td>読み込み状態バッジ（読み込み中/完了/失敗）。</td></tr>
+      <tr><td><code class="inline">store-sel</code></td><td>select</td><td>Store選択ドロップダウン。データ読み込み後に有効化。</td></tr>
+      <tr><td><code class="inline">controls-card</code></td><td>div</td><td>Store選択エリア。データ読み込み前は非表示。</td></tr>
+      <tr><td><code class="inline">result-card</code></td><td>div</td><td>テーブル表示エリア。Store選択後に表示。</td></tr>
+      <tr><td><code class="inline">lightbox</code></td><td>div</td><td>画像拡大表示オーバーレイ。</td></tr>
+    </table>
+  </div>
+
+  <h3 id="fetch">データ取得層</h3>
+  <div class="card">
+    <p>3つのデータ入力経路を持つ。いずれも最終的に <code class="inline">allRows</code>（グローバル配列）に格納し <code class="inline">initControls()</code> を呼ぶ。</p>
+    <table>
+      <tr><th>経路</th><th>関数</th><th>データ源</th></tr>
+      <tr><td>自動読み込み</td><td><code class="inline">initWeekList() → loadWeekFile() → parseXlsx()</code></td><td>GitHub Pages上の xlsx を fetch</td></tr>
+      <tr><td>Excelアップロード</td><td><code class="inline">loadFile() → parseXlsx()</code></td><td>ローカルファイル（FileReader）</td></tr>
+      <tr><td>コピペ入力</td><td><code class="inline">loadPaste() → parseTSV()</code></td><td>テキストエリアの文字列</td></tr>
+    </table>
+  </div>
+
+  <h3 id="process">処理層</h3>
+  <div class="card">
+    <p><code class="inline">render()</code> 内で Store フィルタ → DN集計 → サイズ集計 → HTML文字列生成の順に処理する。</p>
+    <table>
+      <tr><th>処理</th><th>内容</th></tr>
+      <tr><td>Storeフィルタ</td><td><code class="inline">allRows.filter(r => r['Store'] === store)</code></td></tr>
+      <tr><td>サイズ列抽出</td><td>GrV列の値が <code class="inline">/^\d{2}$/</code> にマッチするものを収集・昇順ソート</td></tr>
+      <tr><td>DN集計</td><td>DN no をキーに <code class="inline">byDN</code> オブジェクトを構築</td></tr>
+      <tr><td>マテリアル集計</td><td>DN配下でMaterial/Material Numberをキーにサイズ別数量を合算</td></tr>
+      <tr><td>Grand Total</td><td>全サイズの数量合計をマテリアル行末に表示</td></tr>
+      <tr><td>画像URL生成</td><td><code class="inline">getImageUrl(matCode)</code> でURLを生成し imgタグのsrcに設定</td></tr>
+    </table>
+  </div>
+
+  <h3 id="render">表示層</h3>
+  <div class="card">
+    <p><code class="inline">render()</code> が生成したHTML文字列を <code class="inline">tbl-area</code> の innerHTML に直接挿入。動的DOM生成方式。</p>
+    <table>
+      <tr><th>要素</th><th>CSSクラス</th><th>説明</th></tr>
+      <tr><td>DN行</td><td><code class="inline">dn-row</code></td><td>DN番号・日付・合計点数のサマリー行</td></tr>
+      <tr><td>マテリアル行</td><td><code class="inline">mat-row</code></td><td>商品1行。画像・Material・サイズ別数量・Grand Total</td></tr>
+      <tr><td>画像セル</td><td><code class="inline">img-cell</code></td><td>imgタグ＋onerrorでNo imgプレースホルダーに切り替え</td></tr>
+      <tr><td>数値セル</td><td><code class="inline">num</code></td><td>右揃え・tabular-nums</td></tr>
+    </table>
+  </div>
+
+  <!-- 5. 関数仕様 -->
+  <h2 id="functions">5. 関数仕様</h2>
+
+  <h3 id="fn-initWeekList">initWeekList()</h3>
+  <div class="card">
+    <table>
+      <tr><th>項目</th><th>内容</th></tr>
+      <tr><td>種別</td><td>async function</td></tr>
+      <tr><td>呼び出し元</td><td>ページロード時（スクリプト末尾で即時実行）</td></tr>
+      <tr><td>引数</td><td>なし</td></tr>
+      <tr><td>戻り値</td><td>なし</td></tr>
+    </table>
+    <h4>処理フロー</h4>
+    <div class="flow">
+      <span class="flow-step blue">week-badge を「読み込み中」に</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step blue">fetch(DATA_BASE + 'index.json')</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step green">week-sel にオプション生成</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step green">先頭週を自動選択</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step green">loadWeekFile() 呼び出し</span>
+    </div>
+    <h4>エラー処理</h4>
+    <p>fetch失敗またはHTTPステータス非200の場合、week-badge を「index.jsonが見つかりません」（赤バッジ）に変更し処理終了。</p>
+    <pre>try {
+  const res = await fetch(DATA_BASE + 'index.json', { cache: 'no-cache' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  // ...
+} catch (e) {
+  badge.className = 'badge-err';
+  badge.textContent = 'index.json が見つかりません';
+}</pre>
+  </div>
+
+  <h3 id="fn-loadWeekFile">loadWeekFile()</h3>
+  <div class="card">
+    <table>
+      <tr><th>項目</th><th>内容</th></tr>
+      <tr><td>種別</td><td>async function</td></tr>
+      <tr><td>呼び出し元</td><td>week-sel の onchange / initWeekList()</td></tr>
+      <tr><td>引数</td><td>なし（week-sel.value から取得）</td></tr>
+      <tr><td>戻り値</td><td>なし</td></tr>
+    </table>
+    <h4>処理フロー</h4>
+    <div class="flow">
+      <span class="flow-step blue">week-sel.value を取得</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step blue">fetch(DATA_BASE + file)</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step blue">res.arrayBuffer()</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step green">parseXlsx(buf) 呼び出し</span>
+    </div>
+    <h4>エラー処理</h4>
+    <p>fetch失敗時は week-badge を「ファイル取得失敗: {エラーメッセージ}」に変更。</p>
+  </div>
+
+  <h3 id="fn-parseXlsx">parseXlsx(buf)</h3>
+  <div class="card">
+    <table>
+      <tr><th>項目</th><th>内容</th></tr>
+      <tr><td>種別</td><td>function</td></tr>
+      <tr><td>呼び出し元</td><td>loadWeekFile() / loadFile()</td></tr>
+      <tr><td>引数</td><td><code class="inline">buf: ArrayBuffer</code> — Excelファイルのバイナリ</td></tr>
+      <tr><td>戻り値</td><td>なし（allRows を更新し initControls() を呼ぶ）</td></tr>
+    </table>
+    <h4>処理内容</h4>
+    <pre>const wb = XLSX.read(buf, { type: 'array' });
+const ws = wb.Sheets[wb.SheetNames[0]];   // 先頭シートのみ対象
+const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
+allRows = json.map(r => {
+  const obj = {};
+  Object.keys(r).forEach(k => obj[k.trim()] = String(r[k]).trim());
+  return obj;
+});</pre>
+    <div class="note">先頭シートのみ処理。ヘッダー行は sheet_to_json が自動認識（1行目をキーとして使用）。全値を文字列に変換（trim済み）。</div>
+  </div>
+
+  <h3 id="fn-parseTSV">parseTSV(text)</h3>
+  <div class="card">
+    <table>
+      <tr><th>項目</th><th>内容</th></tr>
+      <tr><td>種別</td><td>function</td></tr>
+      <tr><td>呼び出し元</td><td>loadPaste()</td></tr>
+      <tr><td>引数</td><td><code class="inline">text: string</code> — TSV形式のテキスト（1行目がヘッダー）</td></tr>
+      <tr><td>戻り値</td><td><code class="inline">Array&lt;Object&gt;</code> — ヘッダーをキーとするオブジェクト配列</td></tr>
+    </table>
+    <h4>処理内容</h4>
+    <pre>const lines = text.trim().split('\n');
+if (lines.length < 2) return [];         // ヘッダーのみの場合は空配列
+const headers = lines[0].split('\t').map(h => h.trim());
+return lines.slice(1).filter(l => l.trim()).map(l => {
+  const cols = l.split('\t');
+  const obj = {};
+  headers.forEach((h, i) => obj[h] = (cols[i] || '').trim());
+  return obj;
+});</pre>
+  </div>
+
+  <h3 id="fn-initControls">initControls()</h3>
+  <div class="card">
+    <table>
+      <tr><th>項目</th><th>内容</th></tr>
+      <tr><td>種別</td><td>function</td></tr>
+      <tr><td>呼び出し元</td><td>parseXlsx() / loadPaste() — allRows 更新後に必ず呼ぶ</td></tr>
+      <tr><td>引数</td><td>なし（allRows グローバル変数を参照）</td></tr>
+      <tr><td>戻り値</td><td>なし</td></tr>
+    </table>
+    <h4>処理内容</h4>
+    <p>allRows から Store列のユニーク値を抽出し昇順ソートして store-sel のオプションを再生成。controls-card を表示し result-card を非表示にリセット。</p>
+    <pre>const stores = [...new Set(allRows.map(r => r['Store']).filter(Boolean))].sort();
+// store-sel にオプション生成
+// controls-card.style.display = ''
+// result-card.style.display = 'none'</pre>
+  </div>
+
+  <h3 id="fn-render">render()</h3>
+  <div class="card">
+    <table>
+      <tr><th>項目</th><th>内容</th></tr>
+      <tr><td>種別</td><td>function</td></tr>
+      <tr><td>呼び出し元</td><td>store-sel の onchange</td></tr>
+      <tr><td>引数</td><td>なし（store-sel.value と allRows グローバル変数を参照）</td></tr>
+      <tr><td>戻り値</td><td>なし（tbl-area の innerHTML を更新）</td></tr>
+    </table>
+    <h4>集計ロジック詳細</h4>
+    <table>
+      <tr><th>ステップ</th><th>処理</th><th>使用列</th></tr>
+      <tr><td>1. Storeフィルタ</td><td>選択Storeと一致する行のみ抽出</td><td>Store</td></tr>
+      <tr><td>2. サイズ列特定</td><td>GrV列の値が /^\d{2}$/ にマッチするユニーク値を収集・数値昇順ソート</td><td>GrV</td></tr>
+      <tr><td>3. byDN構築</td><td>DN no をキーに {date, mats{}} を生成</td><td>DN no, ReqDelDate</td></tr>
+      <tr><td>4. マテリアル集計</td><td>Material または Material Number をキーに sizes{} を構築</td><td>Material, Material Number</td></tr>
+      <tr><td>5. サイズ数量加算</td><td>GrV × Quantity/Qty を sizes に加算</td><td>GrV, Quantity, Qty</td></tr>
+      <tr><td>6. HTML生成</td><td>DN行 → マテリアル行の順でHTML文字列を構築しtbl-areaに挿入</td><td>—</td></tr>
+    </table>
+    <h4>Quantity列フォールバック</h4>
+    <pre>const qty = parseInt(r['Quantity'] || r['Qty'] || 1) || 1;</pre>
+    <div class="note">Quantity列が存在しない場合はQty列を参照。どちらもない場合は1として扱う。</div>
+  </div>
+
+  <h3 id="fn-getImageUrl">getImageUrl(matCode)</h3>
+  <div class="card">
+    <table>
+      <tr><th>項目</th><th>内容</th></tr>
+      <tr><td>種別</td><td>function（VBAの InsertPictureInRange のURL生成ロジックをJS移植）</td></tr>
+      <tr><td>呼び出し元</td><td>render() 内のマテリアル行生成時</td></tr>
+      <tr><td>引数</td><td><code class="inline">matCode: string</code> — Material列の値</td></tr>
+      <tr><td>戻り値</td><td><code class="inline">string | null</code> — 画像URL、空文字の場合はnull</td></tr>
+    </table>
+    <h4>ロジック</h4>
+    <pre>function getImageUrl(matCode) {
+  const code = (matCode || '').trim();
+  if (!code) return null;
+  // 10桁の場合は先頭に0を付加（VBAの Len = 10 判定と同じ）
+  if (code.length === 10) {
+    return 'http://image/product/0' + code + '/*/thumbnail?nodefault=true';
+  }
+  return 'http://image/product/' + code + '/*/thumbnail?nodefault=true';
+}</pre>
+    <div class="warn">画像サーバーは社内DNS限定。社外NW（ポケットWi-Fi等）では名前解決できず画像非表示。imgタグのonerrorでNo imgプレースホルダーに自動切り替え。</div>
+  </div>
+
+  <h3 id="fn-switchTab">switchTab(t)</h3>
+  <div class="card">
+    <table>
+      <tr><th>項目</th><th>内容</th></tr>
+      <tr><td>引数</td><td><code class="inline">t: 'auto' | 'paste' | 'file'</code></td></tr>
+      <tr><td>処理</td><td>tab-{t} に active クラスを付与、pane-{t} を表示。他を非表示。</td></tr>
+    </table>
+  </div>
+
+  <h3 id="fn-lightbox">openLightbox(src) / closeLightbox()</h3>
+  <div class="card">
+    <table>
+      <tr><th>関数</th><th>処理</th></tr>
+      <tr><td><code class="inline">openLightbox(src)</code></td><td>lightbox-img の src を設定し lightbox に open クラスを付与（display:flex）</td></tr>
+      <tr><td><code class="inline">closeLightbox()</code></td><td>lightbox から open クラスを除去（display:none）</td></tr>
+    </table>
+    <p>lightbox 要素自体に onclick="closeLightbox()" が設定されているため、背景クリックで閉じる。</p>
+  </div>
+
+  <!-- 6. データフロー -->
+  <h2 id="dataflow">6. データフロー</h2>
+
+  <h3 id="df-auto">自動読み込みフロー</h3>
+  <div class="flow">
+    <span class="flow-step">ページ表示</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step blue">initWeekList()</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step blue">fetch index.json</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step blue">week-sel 生成</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step blue">loadWeekFile()</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step blue">fetch current.xlsx</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step green">parseXlsx()</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step green">allRows 更新</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step green">initControls()</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step amber">Store選択</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step amber">render()</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step">テーブル表示</span>
+  </div>
+
+  <h3 id="df-upload">Excelアップロードフロー</h3>
+  <div class="flow">
+    <span class="flow-step">ファイル選択</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step blue">loadFile(input)</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step blue">FileReader.readAsArrayBuffer</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step green">parseXlsx(buf)</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step green">allRows 更新</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step green">initControls()</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step amber">Store選択</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step amber">render()</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step">テーブル表示</span>
+  </div>
+
+  <h3 id="df-paste">コピペ入力フロー</h3>
+  <div class="flow">
+    <span class="flow-step">TSV貼り付け</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step blue">loadPaste()</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step green">parseTSV(text)</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step green">allRows 更新</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step green">initControls()</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step amber">Store選択</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step amber">render()</span>
+    <span class="flow-arrow">→</span>
+    <span class="flow-step">テーブル表示</span>
+  </div>
+
+  <!-- 7. データ仕様 -->
+  <h2 id="data">7. データ仕様</h2>
+
+  <h3 id="index-json">index.json フォーマット</h3>
+  <pre>{
+  "weeks": [
+    { "label": "2026 W14（最新）", "file": "current.xlsx" },
+    { "label": "2026 W13",         "file": "archive/2026_W13.xlsx" },
+    { "label": "2026 W12",         "file": "archive/2026_W12.xlsx" }
+  ]
+}</pre>
+  <table>
+    <tr><th>フィールド</th><th>型</th><th>説明</th></tr>
+    <tr><td>weeks</td><td>Array</td><td>週エントリの配列。先頭が最新週として自動選択される。</td></tr>
+    <tr><td>weeks[].label</td><td>string</td><td>ドロップダウンに表示される週の名称。</td></tr>
+    <tr><td>weeks[].file</td><td>string</td><td>DATA_BASEからの相対パス。current.xlsx または archive/YYYY_WXX.xlsx。</td></tr>
+  </table>
+  <div class="note">週次更新時は先頭に新エントリを追加し、旧「（最新）」表記を外す。</div>
+
+  <h3 id="excel-format">Excel（出荷明細）フォーマット</h3>
+  <p>SAPから出力されたExcelの先頭シートを処理する。以下の列名を参照。</p>
+  <table>
+    <tr><th>列名</th><th>必須</th><th>説明</th></tr>
+    <tr><td>Store</td><td><span class="badge badge-blue">必須</span></td><td>店舗コード。Store選択ドロップダウンの生成に使用。</td></tr>
+    <tr><td>DN no</td><td><span class="badge badge-blue">必須</span></td><td>デリバリーノート番号。DN行のグルーピングキー。</td></tr>
+    <tr><td>ReqDelDate</td><td><span class="badge badge-green">推奨</span></td><td>希望納品日。DN行に表示。</td></tr>
+    <tr><td>Material</td><td><span class="badge badge-green">推奨</span></td><td>マテリアルコード。画像URL生成にも使用。</td></tr>
+    <tr><td>Material Number</td><td><span class="badge badge-green">推奨</span></td><td>マテリアル番号（商品名等）。テーブル表示用。</td></tr>
+    <tr><td>GrV</td><td><span class="badge badge-blue">必須</span></td><td>サイズコード（2桁数字）。サイズ列の生成に使用。</td></tr>
+    <tr><td>Quantity または Qty</td><td><span class="badge badge-green">推奨</span></td><td>数量。どちらかが存在すれば良い。なければ1として扱う。</td></tr>
+  </table>
+
+  <h3 id="allrows">allRows グローバル変数の構造</h3>
+  <p>全データ入力経路で共通のグローバル配列。型は <code class="inline">Array&lt;Object&gt;</code>。</p>
+  <pre>allRows = [
+  {
+    "Store":           "NSG",
+    "DN no":           "826852918",
+    "ReqDelDate":      "46106",
+    "Material":        "20682301001",
+    "Material Number": "ECCO Cozmo W Black",
+    "GrV":             "37",
+    "Quantity":        "2"
+  },
+  // ... 以降同構造のオブジェクトが続く
+]</pre>
+  <div class="note">全値は文字列型。数値比較が必要な場合は parseInt() や Number() で変換する。</div>
+
+  <!-- 8. 制約・注意事項 -->
+  <h2 id="constraints">8. 制約・注意事項</h2>
+  <table>
+    <tr><th>項目</th><th>制約内容</th><th>対応策</th></tr>
+    <tr><td>画像サーバー</td><td>社内DNS限定URL。社外NWから名前解決不可。</td><td>onerrorでNo imgに自動切り替え。VPN接続で解決可。</td></tr>
+    <tr><td>SharePoint CSP</td><td>SharePointのiframe sandboxによりJS実行不可。</td><td>GitHub PagesまたはAzure Static Web Appsでホスティング。</td></tr>
+    <tr><td>GitHub Pages公開</td><td>リポジトリがPublicのため出荷データが外部公開。</td><td>Azureへの移行後はEntra ID認証で社内限定化予定。</td></tr>
+    <tr><td>Excel形式</td><td>先頭シートのみ処理。ピボットテーブル形式は非対応。</td><td>SAP出力の生データ形式（フラットリスト）を使用すること。</td></tr>
+    <tr><td>ファイルサイズ</td><td>GitHub Pages: 1ファイル100MB上限、リポジトリ1GB上限。</td><td>通常の出荷明細では問題なし（数百KB程度）。</td></tr>
+    <tr><td>ブラウザ互換</td><td>IE非対応（async/await, fetch, Spread構文使用）。</td><td>Chrome/Edge/Safari最新版で動作確認済み。</td></tr>
+  </table>
+
+  <!-- 9. 動作環境 -->
+  <h2 id="env">9. 動作環境</h2>
+  <table>
+    <tr><th>環境</th><th>ブラウザ</th><th>画像表示</th><th>全機能</th></tr>
+    <tr><td>PC / 社内NW</td><td>Chrome, Edge</td><td>✅</td><td>✅</td></tr>
+    <tr><td>PC / VPN</td><td>Chrome, Edge</td><td>✅</td><td>✅</td></tr>
+    <tr><td>PC / 社外NW</td><td>Chrome, Edge</td><td>❌ No img</td><td>✅（画像以外）</td></tr>
+    <tr><td>iPad / 社内NW</td><td>Safari, Chrome</td><td>✅</td><td>✅</td></tr>
+    <tr><td>iPad / 社外NW</td><td>Safari, Chrome</td><td>❌ No img</td><td>✅（画像以外）</td></tr>
+    <tr><td>SharePoint（直接）</td><td>任意</td><td>❌</td><td>❌（CSPブロック）</td></tr>
+  </table>
+
+  <div class="divider"></div>
+  <p style="font-size:12px;color:#aaa;text-align:center">Delivery Search 詳細設計書 v4 ／ ECCO Japan IT</p>
+</main>
+
+<script>
+const links = document.querySelectorAll('nav a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      links.forEach(l => l.classList.remove('active'));
+      const active = document.querySelector('nav a[href="#' + e.target.id + '"]');
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px' });
+document.querySelectorAll('h2[id], h3[id]').forEach(h => observer.observe(h));
+</script>
+</body>
+</html>
