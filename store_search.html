@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Store Delivery Viewer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface2: #f0efe9;
+    --border: #dddbd2;
+    --border2: #c8c6bc;
+    --text: #1a1a18;
+    --text2: #6b6960;
+    --text3: #9e9c93;
+    --accent: #2c5f8a;
+    --accent-light: #e8f0f7;
+    --accent2: #1a3d5c;
+    --green: #2d6a4f;
+    --green-light: #e8f4ee;
+    --size-col: 44px;
+    --row-h: 36px;
+    font-family: 'Courier New', 'Menlo', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  header {
+    background: var(--accent2);
+    color: #fff;
+    padding: 18px 32px;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+  header h1 { font-size: 15px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+  header span { font-size: 11px; color: rgba(255,255,255,0.5); letter-spacing: 0.08em; }
+
+  .main { padding: 24px 32px; max-width: 1600px; }
+
+  .toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text2); font-weight: 700; }
+  select, input[type="file"] {
+    height: 36px;
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    padding: 0 10px;
+    cursor: pointer;
+    outline: none;
+  }
+  select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(44,95,138,0.15); }
+  select { min-width: 160px; }
+
+  .btn {
+    height: 36px;
+    padding: 0 16px;
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12px;
+    font-family: inherit;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: var(--surface2); }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover { background: var(--accent2); }
+
+  textarea {
+    width: 100%;
+    height: 100px;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 8px;
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    resize: vertical;
+    outline: none;
+  }
+  textarea:focus { border-color: var(--accent); }
+  .paste-section { margin-bottom: 16px; }
+  .paste-section label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text2); font-weight: 700; display: block; margin-bottom: 4px; }
+
+  .stats {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 16px;
+    font-size: 11px;
+    color: var(--text2);
+    letter-spacing: 0.06em;
+  }
+  .stats strong { color: var(--text); font-size: 13px; }
+
+  /* Table */
+  .tbl-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  thead th {
+    background: var(--accent2);
+    color: rgba(255,255,255,0.9);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 10px;
+    text-align: center;
+    white-space: nowrap;
+    border-right: 1px solid rgba(255,255,255,0.1);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  thead th.left { text-align: left; }
+  thead th.size-h { width: var(--size-col); min-width: var(--size-col); }
+
+  /* DN group header */
+  tr.dn-header td {
+    background: var(--accent-light);
+    border-top: 2px solid var(--accent);
+    border-bottom: 1px solid var(--border);
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--accent2);
+    padding: 6px 10px;
+    letter-spacing: 0.05em;
+  }
+  tr.dn-header td.dn-num { font-size: 12px; }
+
+  /* Material rows */
+  tr.mat-row td {
+    border-bottom: 1px solid var(--border);
+    padding: 7px 10px;
+    vertical-align: middle;
+  }
+  tr.mat-row:hover td { background: var(--surface2); }
+  tr.mat-row td.size-cell { text-align: center; color: var(--text); font-weight: 500; }
+  tr.mat-row td.size-cell.has-qty { background: var(--green-light); color: var(--green); font-weight: 700; }
+  tr.mat-row td.total-cell { text-align: center; font-weight: 700; color: var(--accent2); background: var(--accent-light); }
+  tr.mat-row td.mat-name { max-width: 220px; }
+  tr.mat-row td.mat-num { font-family: 'Courier New', monospace; font-size: 11px; color: var(--text2); }
+
+  /* DN subtotal */
+  tr.dn-subtotal td {
+    background: var(--surface2);
+    border-bottom: 2px solid var(--border2);
+    font-size: 11px;
+    padding: 5px 10px;
+    color: var(--text2);
+    text-align: center;
+  }
+  tr.dn-subtotal td.sub-label { text-align: right; font-weight: 700; color: var(--text); letter-spacing: 0.06em; }
+  tr.dn-subtotal td.sub-total { font-weight: 700; color: var(--accent2); background: var(--accent-light); }
+
+  .empty { padding: 48px; text-align: center; color: var(--text3); font-size: 13px; letter-spacing: 0.05em; }
+
+  /* divider */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Store Delivery Viewer</h1>
+  <span>DN / Material lookup by store</span>
+</header>
+
+<div class="main">
+
+  <div class="paste-section">
+    <label>① データ貼り付け（TSV）または Excelファイル読み込み</label>
+    <textarea id="paste-area" placeholder="SAPからコピーしたデータをここに貼り付け（ヘッダー行含む）..."></textarea>
+  </div>
+
+  <div class="toolbar">
+    <div class="field">
+      <label>Excelファイル</label>
+      <input type="file" id="file-input" accept=".xlsx,.xls" />
+    </div>
+    <button class="btn primary" onclick="loadData()">読み込む</button>
+    <div style="flex:1"></div>
+    <div class="field">
+      <label>Store</label>
+      <select id="store-select" onchange="renderTable()">
+        <option value="">— Store を選択 —</option>
+      </select>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="stats" id="stats" style="display:none">
+    <span>DN: <strong id="s-dn">0</strong></span>
+    <span>Materials: <strong id="s-mat">0</strong></span>
+    <span>Total Qty: <strong id="s-qty">0</strong></span>
+  </div>
+
+  <div class="tbl-wrap" id="tbl-wrap">
+    <div class="empty">データを読み込んでStore を選択してください</div>
+  </div>
+
+</div>
+
+<script>
+const REQUIRED_COLS = ['Store','ReqDelDate','DN no','Material','Material Number','GrV','Quantity'];
+let allRows = [];
+let sizeSet = [];
+
+function loadData() {
+  const file = document.getElementById('file-input').files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, {raw:false, defval:''});
+      processData(data);
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    const text = document.getElementById('paste-area').value.trim();
+    if (!text) { alert('データを貼り付けるかExcelファイルを選択してください'); return; }
+    const rows = text.split('\n').map(r => r.split('\t'));
+    const headers = rows[0].map(h => h.trim());
+    const data = rows.slice(1).map(r => {
+      const obj = {};
+      headers.forEach((h,i) => obj[h] = (r[i]||'').trim());
+      return obj;
+    });
+    processData(data);
+  }
+}
+
+function processData(data) {
+  if (!data.length) { alert('データが空です'); return; }
+  const headers = Object.keys(data[0]);
+  const missing = REQUIRED_COLS.filter(c => !headers.includes(c));
+  if (missing.length) { alert('必要なカラムが見つかりません: ' + missing.join(', ')); return; }
+
+  allRows = data.filter(r => r['DN no'] && r['Material Number']);
+
+  // サイズ列を検出（GrV列の値を収集 → 数値っぽいもの）
+  const grVals = [...new Set(allRows.map(r => r['GrV']).filter(v => v && !isNaN(v)))];
+  grVals.sort((a,b) => Number(a)-Number(b));
+  sizeSet = grVals;
+
+  // Store一覧
+  const stores = [...new Set(allRows.map(r => r['Store']))].sort();
+  const sel = document.getElementById('store-select');
+  sel.innerHTML = '<option value="">— Store を選択 —</option>';
+  stores.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    sel.appendChild(opt);
+  });
+
+  renderTable();
+}
+
+function renderTable() {
+  const store = document.getElementById('store-select').value;
+  const wrap = document.getElementById('tbl-wrap');
+  const stats = document.getElementById('stats');
+
+  if (!store) {
+    wrap.innerHTML = '<div class="empty">Store を選択してください</div>';
+    stats.style.display = 'none';
+    return;
+  }
+
+  const rows = allRows.filter(r => r['Store'] === store);
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="empty">該当データなし</div>';
+    stats.style.display = 'none';
+    return;
+  }
+
+  // このStoreで使われているサイズのみ
+  const activeSizes = sizeSet.filter(sz =>
+    rows.some(r => r['GrV'] == sz && Number(r['Quantity']||0) > 0)
+  );
+
+  // DN → Material → sizes でグループ化
+  const dnMap = new Map();
+  rows.forEach(r => {
+    const dn = r['DN no'];
+    const mat = r['Material Number'];
+    if (!dnMap.has(dn)) dnMap.set(dn, { date: r['ReqDelDate'], store: r['Store'], mats: new Map() });
+    const mats = dnMap.get(dn).mats;
+    if (!mats.has(mat)) mats.set(mat, { name: r['Material'], sizes: {}, total: 0 });
+    const m = mats.get(mat);
+    const qty = Number(r['Quantity']||0);
+    const sz = r['GrV'];
+    if (sz && !isNaN(sz)) {
+      m.sizes[sz] = (m.sizes[sz]||0) + qty;
+    }
+    m.total += qty;
+  });
+
+  // Build table
+  let totalDN = 0, totalMat = 0, totalQty = 0;
+  const hasSizes = activeSizes.length > 0;
+
+  let html = '<table><thead><tr>';
+  html += '<th class="left" style="min-width:60px">Store</th>';
+  html += '<th class="left" style="min-width:90px">ReqDelDate</th>';
+  html += '<th class="left" style="min-width:110px">DN no</th>';
+  html += '<th class="left" style="min-width:200px">Material</th>';
+  html += '<th class="left" style="min-width:150px">Material Number</th>';
+  if (hasSizes) activeSizes.forEach(sz => html += `<th class="size-h">${sz}</th>`);
+  html += '<th style="min-width:70px">Grand Total</th>';
+  html += '</tr></thead><tbody>';
+
+  dnMap.forEach((dnData, dn) => {
+    totalDN++;
+    const colSpan = 5 + (hasSizes ? activeSizes.length : 0) + 1;
+
+    html += `<tr class="dn-header"><td class="dn-num" colspan="${colSpan}">DN: ${dn}&nbsp;&nbsp;<span style="font-weight:400;font-size:10px;color:var(--accent)">${dnData.date}</span></td></tr>`;
+
+    let dnTotal = 0;
+    const dnSizeTotals = {};
+
+    dnData.mats.forEach((matData, matNum) => {
+      totalMat++;
+      dnTotal += matData.total;
+      totalQty += matData.total;
+      activeSizes.forEach(sz => { dnSizeTotals[sz] = (dnSizeTotals[sz]||0) + (matData.sizes[sz]||0); });
+
+      html += '<tr class="mat-row">';
+      html += `<td>${dnData.store}</td>`;
+      html += `<td>${dnData.date}</td>`;
+      html += `<td style="color:var(--text3);font-size:11px">${dn}</td>`;
+      html += `<td class="mat-name">${matData.name}</td>`;
+      html += `<td class="mat-num">${matNum}</td>`;
+      if (hasSizes) {
+        activeSizes.forEach(sz => {
+          const q = matData.sizes[sz]||0;
+          html += `<td class="size-cell${q>0?' has-qty':''}">${q>0?q:''}</td>`;
+        });
+      }
+      html += `<td class="total-cell">${matData.total}</td>`;
+      html += '</tr>';
+    });
+
+    // DN subtotal
+    html += `<tr class="dn-subtotal">`;
+    html += `<td colspan="5" class="sub-label">DN Subtotal</td>`;
+    if (hasSizes) activeSizes.forEach(sz => html += `<td>${dnSizeTotals[sz]||''}</td>`);
+    html += `<td class="sub-total">${dnTotal}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  stats.style.display = 'flex';
+  document.getElementById('s-dn').textContent = totalDN;
+  document.getElementById('s-mat').textContent = totalMat;
+  document.getElementById('s-qty').textContent = totalQty;
+}
+</script>
+</body>
+</html>
