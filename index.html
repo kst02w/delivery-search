@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivery Search</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;color:#1a1a1a;background:#f5f5f5;padding:24px}
+h1{font-size:18px;font-weight:500;margin-bottom:20px}
+.card{background:#fff;border-radius:10px;border:1px solid #e0e0e0;padding:20px;margin-bottom:16px}
+.tab-row{display:flex;gap:6px;margin-bottom:16px}
+.tab{font-size:13px;padding:6px 14px;border:1px solid #d0d0d0;border-radius:6px;cursor:pointer;background:#fff;color:#555}
+.tab.active{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+.paste-box{width:100%;height:80px;font-size:11px;font-family:monospace;padding:8px;border:1px solid #d0d0d0;border-radius:6px;background:#fafafa;color:#1a1a1a;resize:vertical}
+.btn{font-size:13px;padding:7px 18px;border:1px solid #d0d0d0;border-radius:6px;cursor:pointer;background:#fff;color:#1a1a1a}
+.btn:hover{background:#f0f0f0}
+.btn-primary{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+.btn-primary:hover{background:#333}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.row:first-child{margin-top:0}
+.row label{font-size:13px;color:#555;white-space:nowrap}
+.upload-btn{display:inline-block;font-size:13px;padding:7px 18px;border:1px solid #d0d0d0;border-radius:6px;cursor:pointer;background:#fff;color:#1a1a1a}
+.upload-btn:hover{background:#f0f0f0}
+input[type="file"]{display:none}
+.fname{font-size:12px;color:#999}
+.stat{font-size:12px;color:#888;padding:5px 10px;background:#f5f5f5;border-radius:6px;border:1px solid #e0e0e0}
+.badge-loading{font-size:12px;padding:4px 10px;border-radius:6px;background:#fff8e1;color:#b45309;border:1px solid #fcd34d}
+.badge-ok{font-size:12px;padding:4px 10px;border-radius:6px;background:#e6f4ea;color:#2d7a3a;border:1px solid #b7dfbf}
+.badge-err{font-size:12px;padding:4px 10px;border-radius:6px;background:#fef2f2;color:#b91c1c;border:1px solid #fca5a5}
+select{font-size:13px;padding:6px 10px;border:1px solid #d0d0d0;border-radius:6px;background:#fff;color:#1a1a1a;min-width:140px}
+.tbl-wrap{overflow-x:auto;border:1px solid #e0e0e0;border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:12px;min-width:700px}
+th{background:#f8f8f8;font-weight:500;font-size:11px;color:#666;padding:8px 12px;border-bottom:1px solid #e0e0e0;text-align:left;white-space:nowrap;position:sticky;top:0;z-index:1}
+td{padding:6px 12px;border-bottom:1px solid #f0f0f0;color:#1a1a1a;white-space:nowrap;vertical-align:middle}
+tr.dn-row td{background:#f8f8f8;font-weight:500;font-size:11px;color:#555;padding:7px 12px;border-top:2px solid #e0e0e0;border-bottom:1px solid #e0e0e0}
+tr.mat-row:hover td{background:#fafafa}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+td.indent{padding-left:24px}
+td.img-cell{padding:4px 12px;width:60px}
+.thumb{width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #e0e0e0;cursor:pointer;display:block}
+.no-img{width:48px;height:48px;border-radius:6px;border:1px dashed #d0d0d0;display:flex;align-items:center;justify-content:center;font-size:9px;color:#bbb}
+.empty{text-align:center;padding:40px;color:#aaa;font-size:13px}
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:999;align-items:center;justify-content:center;cursor:zoom-out}
+.lightbox.open{display:flex}
+.lightbox img{max-width:80vw;max-height:80vh;border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.4)}
+.divider{width:1px;height:20px;background:#e0e0e0}
+</style>
+</head>
+<body>
+
+<h1>Delivery Search</h1>
+
+<!-- データソース選択 -->
+<div class="card">
+  <div class="tab-row">
+    <button class="tab active" id="tab-auto"  onclick="switchTab('auto')">自動読み込み</button>
+    <button class="tab"        id="tab-paste" onclick="switchTab('paste')">コピペ入力</button>
+    <button class="tab"        id="tab-file"  onclick="switchTab('file')">Excelアップロード</button>
+  </div>
+
+  <!-- 自動読み込みパネル -->
+  <div id="pane-auto">
+    <div class="row">
+      <label>週を選択</label>
+      <select id="week-sel" onchange="loadWeekFile()" disabled>
+        <option value="">読み込み中...</option>
+      </select>
+      <span id="week-badge"></span>
+    </div>
+  </div>
+
+  <!-- コピペパネル -->
+  <div id="pane-paste" style="display:none">
+    <textarea class="paste-box" id="paste-area" placeholder="SAPのローデータをここに貼り付け（ヘッダー行含むTSV）"></textarea>
+    <div class="row"><button class="btn btn-primary" onclick="loadPaste()">読み込む</button></div>
+  </div>
+
+  <!-- Excelアップロードパネル -->
+  <div id="pane-file" style="display:none">
+    <label class="upload-btn">ファイルを選択<input type="file" id="file-input" accept=".xlsx,.xls" onchange="loadFile(this)"></label>
+    <span class="fname" id="file-name">未選択</span>
+  </div>
+</div>
+
+<!-- Store選択 -->
+<div class="card" id="controls-card" style="display:none">
+  <div class="row">
+    <label>Store</label>
+    <select id="store-sel" onchange="render()"><option value="">— 選択してください —</option></select>
+    <span class="stat" id="stat-txt"></span>
+  </div>
+</div>
+
+<!-- 結果テーブル -->
+<div id="result-card" style="display:none">
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="tbl-wrap" id="tbl-area"></div>
+  </div>
+</div>
+
+<!-- ライトボックス -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+<script>
+// ============================================================
+// 設定: HTMLファイルから見たdataフォルダへの相対パス
+// フォルダ構成:
+//   出荷明細/
+//     ツール/delivery_search.html  ← このファイル
+//     data/index.json
+//     data/current.xlsx
+//     data/archive/2026_W13.xlsx
+// ============================================================
+const DATA_BASE = '../data/';
+
+let allRows = [];
+let currentTab = 'auto';
+
+// ============================================================
+// タブ切り替え
+// ============================================================
+function switchTab(t) {
+  currentTab = t;
+  ['auto','paste','file'].forEach(id => {
+    document.getElementById('tab-' + id).className = 'tab' + (t === id ? ' active' : '');
+    document.getElementById('pane-' + id).style.display = t === id ? '' : 'none';
+  });
+  // 自動タブに戻ったとき週が選択済みなら再描画
+  if (t === 'auto') {
+    const sel = document.getElementById('week-sel');
+    if (sel.value) loadWeekFile();
+  }
+}
+
+// ============================================================
+// 自動読み込み: index.json → 週ドロップダウン生成
+// ============================================================
+async function initWeekList() {
+  const badge = document.getElementById('week-badge');
+  badge.className = 'badge-loading';
+  badge.textContent = '読み込み中...';
+
+  try {
+    const res = await fetch(DATA_BASE + 'index.json', { cache: 'no-cache' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+
+    const sel = document.getElementById('week-sel');
+    sel.innerHTML = '<option value="">— 週を選択してください —</option>';
+    json.weeks.forEach(w => {
+      const o = document.createElement('option');
+      o.value = w.file;
+      o.textContent = w.label;
+      sel.appendChild(o);
+    });
+    sel.disabled = false;
+
+    badge.className = 'badge-ok';
+    badge.textContent = json.weeks.length + ' 週分 利用可能';
+
+    // 先頭（最新週）を自動選択して読み込む
+    if (json.weeks.length > 0) {
+      sel.selectedIndex = 1;
+      await loadWeekFile();
+    }
+  } catch (e) {
+    badge.className = 'badge-err';
+    badge.textContent = 'index.json が見つかりません';
+    document.getElementById('week-sel').innerHTML = '<option value="">取得失敗</option>';
+  }
+}
+
+async function loadWeekFile() {
+  const sel = document.getElementById('week-sel');
+  const file = sel.value;
+  if (!file) return;
+
+  const badge = document.getElementById('week-badge');
+  badge.className = 'badge-loading';
+  badge.textContent = '読み込み中...';
+
+  try {
+    const res = await fetch(DATA_BASE + file, { cache: 'no-cache' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const buf = await res.arrayBuffer();
+    parseXlsx(buf);
+
+    badge.className = 'badge-ok';
+    badge.textContent = '読み込み完了';
+  } catch (e) {
+    badge.className = 'badge-err';
+    badge.textContent = 'ファイル取得失敗: ' + e.message;
+  }
+}
+
+// ============================================================
+// コピペ読み込み
+// ============================================================
+function loadPaste() {
+  allRows = parseTSV(document.getElementById('paste-area').value);
+  if (allRows.length) initControls();
+  else showEmpty('データを貼り付けてください');
+}
+
+// ============================================================
+// Excelアップロード
+// ============================================================
+function loadFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('file-name').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => parseXlsx(e.target.result);
+  reader.readAsArrayBuffer(file);
+}
+
+// ============================================================
+// 共通: xlsx → allRows
+// ============================================================
+function parseXlsx(buf) {
+  const wb = XLSX.read(buf, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  allRows = json.map(r => {
+    const obj = {};
+    Object.keys(r).forEach(k => obj[k.trim()] = String(r[k]).trim());
+    return obj;
+  });
+  if (allRows.length) initControls();
+  else showEmpty('データが読み込めませんでした');
+}
+
+function parseTSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+  const headers = lines[0].split('\t').map(h => h.trim());
+  return lines.slice(1).filter(l => l.trim()).map(l => {
+    const cols = l.split('\t');
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = (cols[i] || '').trim());
+    return obj;
+  });
+}
+
+// ============================================================
+// Store選択ドロップダウン初期化
+// ============================================================
+function initControls() {
+  const stores = [...new Set(allRows.map(r => r['Store']).filter(Boolean))].sort();
+  const sel = document.getElementById('store-sel');
+  sel.innerHTML = '<option value="">— 選択してください —</option>';
+  stores.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s;
+    sel.appendChild(o);
+  });
+  document.getElementById('controls-card').style.display = '';
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('stat-txt').textContent = '';
+}
+
+function showEmpty(msg) {
+  document.getElementById('result-card').style.display = '';
+  document.getElementById('tbl-area').innerHTML = '<div class="empty">' + msg + '</div>';
+}
+
+// ============================================================
+// 画像URL生成（VBAロジックをJS移植）
+// ============================================================
+function getImageUrl(matCode) {
+  const code = (matCode || '').trim();
+  if (!code) return null;
+  if (code.length === 10) {
+    return 'http://image/product/0' + code + '/*/thumbnail?nodefault=true';
+  }
+  return 'http://image/product/' + code + '/*/thumbnail?nodefault=true';
+}
+
+// ============================================================
+// ライトボックス
+// ============================================================
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+}
+
+// ============================================================
+// テーブル描画
+// ============================================================
+function render() {
+  const store = document.getElementById('store-sel').value;
+  if (!store) { document.getElementById('result-card').style.display = 'none'; return; }
+  const rows = allRows.filter(r => r['Store'] === store);
+  if (!rows.length) { showEmpty('該当データなし'); return; }
+
+  const sizeRe = /^\d{2}$/;
+  const allSizes = [...new Set(rows.map(r => r['GrV']).filter(v => v && sizeRe.test(v)))]
+    .map(Number).sort((a, b) => a - b).map(String);
+
+  const byDN = {};
+  rows.forEach(r => {
+    const dn = r['DN no'] || '—';
+    if (!byDN[dn]) byDN[dn] = { date: r['ReqDelDate'], mats: {} };
+    const matCode = r['Material'] || '';
+    const matNo   = r['Material Number'] || '';
+    const key = matCode || matNo;
+    if (!byDN[dn].mats[key]) byDN[dn].mats[key] = { matCode, matNo, sizes: {} };
+    const grv = r['GrV'];
+    const qty = parseInt(r['Quantity'] || r['Qty'] || 1) || 1;
+    if (grv && sizeRe.test(grv))
+      byDN[dn].mats[key].sizes[grv] = (byDN[dn].mats[key].sizes[grv] || 0) + qty;
+  });
+
+  const dnList = Object.keys(byDN).sort();
+
+  let html = '<table><thead><tr>';
+  html += '<th>画像</th><th>DN no</th><th>ReqDelDate</th><th>Material</th><th>Material Number</th>';
+  allSizes.forEach(s => html += '<th style="text-align:right">' + s + '</th>');
+  html += '<th style="text-align:right">Grand Total</th></tr></thead><tbody>';
+
+  dnList.forEach(dn => {
+    const g = byDN[dn];
+    const matKeys = Object.keys(g.mats);
+    const dnTotal = matKeys.reduce((sum, k) =>
+      sum + allSizes.reduce((s2, sz) => s2 + (g.mats[k].sizes[sz] || 0), 0), 0);
+    const colspan = 5 + allSizes.length + 1;
+    html += '<tr class="dn-row"><td colspan="' + colspan + '">DN: ' + dn +
+      '&nbsp;&nbsp;<span style="font-weight:400;color:#999">' + g.date + '</span>' +
+      '&nbsp;&nbsp;<span style="font-weight:400;color:#999">合計 ' + dnTotal + ' 点</span></td></tr>';
+
+    matKeys.forEach(key => {
+      const m = g.mats[key];
+      const hasSizes = allSizes.some(s => m.sizes[s] > 0);
+      const rowTotal = allSizes.reduce((s, sz) => s + (m.sizes[sz] || 0), 0);
+      const imgUrl = getImageUrl(m.matCode);
+
+      html += '<tr class="mat-row">';
+      html += '<td class="img-cell">';
+      if (imgUrl) {
+        html += '<img class="thumb" src="' + imgUrl + '" alt="' + m.matCode + '"' +
+          ' onclick="openLightbox(\'' + imgUrl + '\')"' +
+          ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+          '<div class="no-img" style="display:none">No img</div>';
+      } else {
+        html += '<div class="no-img">No img</div>';
+      }
+      html += '</td>';
+      html += '<td></td><td></td>';
+      html += '<td class="indent">' + m.matCode + '</td><td>' + m.matNo + '</td>';
+      allSizes.forEach(s => {
+        const v = m.sizes[s] || 0;
+        html += '<td class="num">' + (hasSizes && v ? v : '') + '</td>';
+      });
+      html += '<td class="num">' + (rowTotal || '') + '</td></tr>';
+    });
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('tbl-area').innerHTML = html;
+  document.getElementById('result-card').style.display = '';
+  document.getElementById('stat-txt').textContent = dnList.length + ' DN / ' + rows.length + ' 行';
+}
+
+// ============================================================
+// 起動時: index.json を読んで週リスト初期化
+// ============================================================
+initWeekList();
+</script>
+</body>
+</html>
