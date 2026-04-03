@@ -1,0 +1,8 @@
+{
+  "weeks": [
+    { "label": "2026 W14（最新）", "file": "current.xlsx" },
+    { "label": "2026 W13", "file": "archive/2026_W13.xlsx" },
+    { "label": "2026 W12", "file": "archive/2026_W12.xlsx" },
+    { "label": "2026 W11", "file": "archive/2026_W11.xlsx" }
+  ]
+}
